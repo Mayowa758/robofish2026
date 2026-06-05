@@ -18,6 +18,7 @@ void setup() {
   s2.attach(S2_PIN);
   s3.attach(S3_PIN);
 
+  //Neutral positions
   s1.write(s1_neutral);
   s2.write(s2_neutral);
   s3.write(s3_neutral);
@@ -31,22 +32,24 @@ void loop() {
 
 void fishWave () {
 
-  int amp = 25;
-  int speedDelay = 25;
+  int amp = 25; //how far fish bends
+  int speedDelay = 25; //speed
 
-  for (int i= -amp; i <= amp; i++) {
-    s1.write(s1_neutral + i);
-    s2.write(s2_neutral - i * 0.5);
-    s3.write(s2_neutral + i * 0.5);
+  //forward motion (sweep motion)
+for (int i= -amp; i <= amp; i++) {
+    s1.write(s1_neutral + i); //main tail
+    s2.write(s2_neutral - i * 0.5); //stabilisation servo
+    s3.write(s2_neutral + i * 0.5); //stabilisation servo
 
     delay(speedDelay);
 
   }
 
+//reverse motion (reverse sweep motion)
   for (int i= amp; i >= -amp; i--) {
-    s1.write(s1_neutral + i);
-    s2.write(s2_neutral - i * 0.5);
-    s3.write(s2_neutral + i * 0.5);
+    s1.write(s1_neutral + i); //main tail
+    s2.write(s2_neutral - i * 0.5); //stabilisation servo
+    s3.write(s2_neutral + i * 0.5); //stabilisation servo
 
     delay(speedDelay);
 
