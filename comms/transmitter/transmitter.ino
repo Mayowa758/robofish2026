@@ -1,34 +1,30 @@
 #include <SoftwareSerial.h>
-#define DE_RE 9
-#define RS485_RX 10
-#define RS485_TX 11
 
-#define TRANSMIT_MODE HIGH
-#define RECIEVE_MODE LOW
+#define ENABLE_PIN 8
+#define RX_PIN 10
+#define TX_PIN 11
 
-
-SoftwareSerial rs485(RS485_RX, RS485_TX);
-
-
+SoftwareSerial mySerial(RX_PIN, TX_PIN);
 void setup() {
-  pinMode(DE_RE, OUTPUT);
-  digitalWrite(DE_RE, TRANSMIT_MODE);
-  Serial.begin(9600);
-  rs485.begin(4800);
-}
 
-// Transmit message
-void transmit(String message) {
-  digitalWrite(DE_RE, TRANSMIT_MODE);
-  rs485.println(message);
-  delay(10);
-  digitalWrite(DE_RE, RECIEVE_MODE);
+  Serial.begin(115200);
+  mySerial.begin(9600);
+
+  
+  pinMode(ENABLE_PIN, OUTPUT);
+
+  digitalWrite(ENABLE_PIN, HIGH);
+
+
 }
 
 void loop() {
-  String message = "Hello";
-  transmit(message);
-  Serial.print("[TX] Sent: ");
-  Serial.println();
-  delay(1000);
+  int data = random(0, 100);
+  mySerial.write(data);
+
+  Serial.print("Data sent: ");
+  Serial.println(data);
+
+  delay(2000);
+
 }
