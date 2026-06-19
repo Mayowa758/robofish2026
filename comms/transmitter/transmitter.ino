@@ -3,8 +3,8 @@
 */
 
 #include <SoftwareSerial.h>
-#include <XBOXONE.h>
 #include <Servo.h>
+#include "transmitter.h"
 
 
 // Servo Pins (probs should be in receiver)
@@ -19,13 +19,10 @@ const int S2_PIN = 10;
 const int S3_PIN = 7;
 const int S4_PIN = 6;
 
-int neutral_pos = 90
-
-USB usb;
-XBOXONE Xbox(&usb);
-
-int LHX, LHY, RHX, RHY;
+int neutral_pos = 90;
 const long interval = 100;
+
+
 
 
 #define DE_RE 9
@@ -39,54 +36,17 @@ const long interval = 100;
 SoftwareSerial rs485(RS485_RX, RS485_TX);
 
 
-typedef enum Instruction_ {
-  CHANGE_SPEED, 
-  TURN_LEFT_FLIPPER,
-  TURN_RIGHT_FLIPPER,
-  TURN_TOP_FLIPPER,
-  CALIBRATE_ANGLES
-} Instruction;
-
 void setup() {
   pinMode(DE_RE, OUTPUT);
   digitalWrite(DE_RE, TRANSMIT_MODE);
   Serial.begin(9600);
   rs485.begin(4800);
 
-
-  s1.attach(S1_PIN);
-  s2.attach(S2_PIN);
-  s3.attach(S3_PIN);
-
-  //Neutral positions
-  s1.write(s1_neutral);
-  s2.write(s2_neutral);
-  s3.write(s3_neutral);
-
-  // Setting up the Xbox Controller
-  if (Usb.Init() == -1) {
-    Serial.println("The Xbox Controller has not been connected");
-    while (1);
-  }
-
-  Serial.print("The Xbox Controller has started!");
 }
 
-xbox_controller() {
-  Usb.Task();
-  if (Xbox.XboxOneConnected) {
-    int16_t LHX = Xbox.getAnalogHat(LeftHatX);
-    int16_t LHY = Xbox.getAnalogHat(LeftHatY);
-    int16_t RHX = Xbox.getAnalogHat(RightHatX);
-    int16_t RHY = Xbox.getAnalogHat(RightHatX);
 
-    bool increase_speed = Xbox.getButtonClick(LT);
-    bool decrease_speed = Xbox.getButtonClick(RT);
 
-    // I need to do some mapping of values some maths 
 
-  }  
-}
 
 
 // Encode Instruction
@@ -109,7 +69,6 @@ xbox_controller() {
 uint8_t encode_message(Instruction inst, uint8_t paramater) {
   return 0;
 }
-
 // Transmit message
 void transmit(String message) {
   digitalWrite(DE_RE, TRANSMIT_MODE);
