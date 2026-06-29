@@ -17,7 +17,10 @@ const long interval = 100;
 #define TRANSMIT_MODE HIGH
 #define RECEIVE_MODE LOW
 
+#define JOYSTICK_DEADZONE 20
+
 SoftwareSerial rs485(RS485_RX, RS485_TX);
+
 
 // Instruction State
 typedef enum Instruction_ {
@@ -87,8 +90,42 @@ void read_controller() {
   if (PS4.getButtonClick(R2))
       fish.rightFin--;
 
-  fish.rightFin = constrain(fish.rightFin, -15, 15);  
+  fish.rightFin = constrain(fish.rightFin, -15, 15); 
+
+  // For controlling up and down movement of the fish
+  control_tilt(); 
+
+  // Stop Command - stops the fish abruptly
+  if (PS4.getButtonClick(CIRCLE)) {
+    fish = {0, 0, 0};
+  }
+
+  // Calibrate Commands - sets the fish back to base values
+  if (PS4.getButtonClick(OPTION)) {
+    fish = {0 ,0, 15}; // 
+  }
 }
+
+void control_tilt() {
+  int16_t rightY = PS4.getAnalogHat(RightHatY);
+
+  // Shift joystick centre to zero
+  int tilt = rightY - 127;
+
+  // Remove joystick noise around centre
+  if (abs(tilt) < JOYSTICK_DEADZONE) {
+    tilt = 0;
+  }
+  else {
+    // Convert joystick movement into fin angle
+    tilt = map(tilt, -127, 128, -15, 15);
+  }
+
+  // Apply same tilt angle to both fins
+  fish.leftFin = constrain(tilt, -15, 15);
+  fish.rightFin = constrain(tilt, -15, 15);
+}
+
 
 // Function for sending out updates
 void send_updates()
