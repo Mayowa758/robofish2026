@@ -2,7 +2,6 @@
   TRANSMITTER
 */
 
-#include <SoftwareSerial.h>
 #include <PS4USB.h>
 
 USB Usb;
@@ -10,16 +9,8 @@ PS4USB PS4(&Usb);
 
 const long interval = 100;
 
-#define DE_RE 9
-#define RS485_RX 10
-#define RS485_TX 11
-
-#define TRANSMIT_MODE HIGH
-#define RECEIVE_MODE LOW
-
 #define JOYSTICK_DEADZONE 20
 
-SoftwareSerial rs485(RS485_RX, RS485_TX);
 
 
 // Instruction State
@@ -44,10 +35,8 @@ FishState previousFish = {-1, -1, -1};
 
 
 void setup() {
-  pinMode(DE_RE, OUTPUT);
-  digitalWrite(DE_RE, TRANSMIT_MODE);
   Serial.begin(9600);
-  rs485.begin(4800);
+  Serial1.begin(4800);
 
   // Setting up the PS4 Controller
  if (Usb.Init() == -1)
@@ -101,7 +90,7 @@ void read_controller() {
   }
 
   // Calibrate Commands - sets the fish back to base values
-  if (PS4.getButtonClick(OPTION)) {
+  if (PS4.getButtonClick(TRIANGLE)) {
     fish = {0 ,0, 15}; // 
   }
 }
@@ -170,15 +159,14 @@ uint8_t encode_message(Instruction inst, uint8_t parameter) {
   return (inst << 5) | (parameter & 0x1F);
 }
 
-void transmit(uint8_t packet)
-{
-  digitalWrite(DE_RE, TRANSMIT_MODE);
-  rs485.write(packet);
-  rs485.flush();
-  digitalWrite(DE_RE, RECEIVE_MODE);
-  Serial.print("Packet: ");
-  Serial.println(packet,BIN);
+void transmit(uint8_t packet) {
+  String strNum = String(packet);
+  Serial1.println(strNum);
+
+  Serial.print("[TX] Data Sent (Decimal Value): ");
+  Serial.println(packet);
 }
+
 
 void loop()
 {
