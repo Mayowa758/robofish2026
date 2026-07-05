@@ -9,9 +9,23 @@
 
 // Sensitivity (s): Fraction of new state current state takes on
 // state[t + 1] = (1-s) * state[t] + s*target_state[t]
-#define SENSITIVITY 0.1
+#define SENSITIVITY 0.01
 
 FishState state;
+
+
+int8_t smoothStep(int8_t current, int8_t target) {
+    if (current == target) return current;
+
+    float smoothed = (1 - SENSITIVITY) * current + target * SENSITIVITY;
+    int8_t next = (int8_t) roundf(smoothed);
+
+    if (next == current) {
+        next = current + (target > current ? 1 : -1);
+    }
+
+    return next;
+}
 
 void tickState(FishState targetState) {
     if (targetState.calibrate != NO_CHANGE) {
@@ -19,15 +33,15 @@ void tickState(FishState targetState) {
     }
 
     if (targetState.leftFin != NO_CHANGE) {
-        state.leftFin = (int8_t) roundf((1 - SENSITIVITY) * state.leftFin + targetState.leftFin * SENSITIVITY);
+        state.leftFin = smoothStep(state.leftFin, targetState.leftFin);
     }
 
     if (targetState.rightFin != NO_CHANGE) {
-        state.rightFin = (int8_t) roundf((1 - SENSITIVITY) * state.rightFin + targetState.rightFin * SENSITIVITY);
+        state.rightFin = smoothStep(state.rightFin, targetState.rightFin);
     }
 
     if (targetState.speed != NO_CHANGE) {
-        state.speed = (int8_t) roundf((1 - SENSITIVITY) * state.speed + targetState.speed * SENSITIVITY);
+        state.speed = smoothStep(state.speed, targetState.speed);
     }
 }
 void print_state(FishState state) {
@@ -60,7 +74,7 @@ void loop() {
         message.trim();
         
         uint32_t int_message = (uint32_t) strtoul(message.c_str(), NULL, 10);
-        Serial.print("[RX] Data Recieved (Decimal Value): ");
+        // Serial.print("[RX] Data Recieved (Decimal Value): ");
         Serial.println(int_message);
 
         FishState targetState = decode_state(int_message);
