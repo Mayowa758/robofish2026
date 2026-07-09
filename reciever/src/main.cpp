@@ -20,6 +20,7 @@ int wavePosition = -25;
 int waveDirection = 1;
 unsigned long lastWaveUpdate = 0;
 
+void calibrateServos();
 /* COMMS STUFF */
 
 #define RX1_PIN 14
