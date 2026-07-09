@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <comms.h>
-#include <Servo.h>
+#include <ESP32Servo.h>
 
 /* Servo STUFF */
 
@@ -9,7 +9,7 @@ Servo s2;
 Servo s3;
 
 const int S1_PIN = 9;
-const int S2_PIN = 10;
+const int S2_PIN = 27;
 const int S3_PIN = 7;
 
 int s1_neutral = 90;
