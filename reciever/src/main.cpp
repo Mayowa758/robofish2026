@@ -9,7 +9,7 @@
 
 // Sensitivity (s): Fraction of new state current state takes on
 // state[t + 1] = (1-s) * state[t] + s*target_state[t]
-#define SENSITIVITY 0.01
+#define SENSITIVITY 0.05
 
 FishState state;
 
