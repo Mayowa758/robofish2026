@@ -17,8 +17,8 @@ FishState state;
 int8_t smoothStep(int8_t current, int8_t target) {
     if (current == target) return current;
 
-    float smoothed = (1 - SENSITIVITY) * current + target * SENSITIVITY;
-    int8_t next = (int8_t) roundf(smoothed);
+    float weighted_sum = (1 - SENSITIVITY) * current + target * SENSITIVITY;
+    int8_t next = (int8_t) roundf(weighted_sum);
 
     if (next == current) {
         next = current + (target > current ? 1 : -1);
@@ -74,8 +74,6 @@ void loop() {
         message.trim();
         
         uint32_t int_message = (uint32_t) strtoul(message.c_str(), NULL, 10);
-        // Serial.print("[RX] Data Recieved (Decimal Value): ");
-        Serial.println(int_message);
 
         FishState targetState = decode_state(int_message);
         tickState(targetState);
