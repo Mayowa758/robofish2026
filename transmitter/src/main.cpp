@@ -101,7 +101,9 @@ void loop() {
   if (gamepad && gamepad->isConnected()) {
 
     state = generateTargetState();
+    print_state(state);
     sendState(state);
 
-  delay(200);
+    delay(200);
+  }
 }
