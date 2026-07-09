@@ -13,8 +13,6 @@ void setup() {
     Serial.print("The PS4 Controller has started!");
   }
 
-}
-
 void loop() {
   int16_t rightY = PS4.getAnalogHat(RY);
   Serial.println(RightHatY);

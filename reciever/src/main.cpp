@@ -1,6 +1,24 @@
 #include <Arduino.h>
 #include <comms.h>
+#include <Servo.h>
 
+/* Servo STUFF */
+
+Servo s1;
+Servo s2;
+Servo s3;
+
+const int S1_PIN = 9;
+const int S2_PIN = 10;
+const int S3_PIN = 7;
+
+int s1_neutral = 90;
+int s2_neutral = 90;
+int s3_neutral = 90;
+
+int wavePosition = -25;
+int waveDirection = 1;
+unsigned long lastWaveUpdate = 0;
 
 /* COMMS STUFF */
 
@@ -28,8 +46,9 @@ int8_t smoothStep(int8_t current, int8_t target) {
 }
 
 void tickState(FishState targetState) {
-    if (targetState.calibrate != NO_CHANGE) {
-        state.calibrate = targetState.calibrate;
+    if (targetState.calibrate == CALIBRATE) {
+        calibrateServos();
+        state.calibrate = NO_CHANGE;
     }
 
     if (targetState.leftFin != NO_CHANGE) {
@@ -62,10 +81,68 @@ void print_state(FishState state) {
   Serial.println("------------------");
 }
 
+void fishWave() {
+
+    int amp = map(state.speed, 0, 20, 10, 30);
+    int speedDelay = map(state.speed, 0, 20, 40, 10);
+
+    if (millis() - lastWaveUpdate >= speedDelay) {
+
+        lastWaveUpdate = millis();
+
+        wavePosition += waveDirection;
+
+        if (wavePosition >= amp) {
+            waveDirection = -1;
+        }
+
+        if (wavePosition <= -amp) {
+            waveDirection = 1;
+        }
+
+        wavePosition = constrain(wavePosition, -amp, amp);
+
+        s1.write(constrain(s1_neutral + wavePosition, 0, 180));
+    }
+}
+
+void updateSideFins() {
+    s2.write(constrain(s2_neutral + state.leftFin, 0, 180));
+    s3.write(constrain(s3_neutral + state.rightFin, 0, 180));
+}
+
+void calibrateServos() {
+
+    s1_neutral = 90;
+    s2_neutral = 90;
+    s3_neutral = 90;
+
+    s1.write(s1_neutral);
+    s2.write(s2_neutral);
+    s3.write(s3_neutral);
+
+    wavePosition = 0;
+
+    state.leftFin = 0;
+    state.rightFin = 0;
+}
+
+
 void setup() {
     Serial.begin(115200);
 
     Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
+
+    s1.attach(S1_PIN);
+    s2.attach(S2_PIN);
+    s3.attach(S3_PIN);
+
+    //Neutral positions
+    s1.write(s1_neutral);
+    s2.write(s2_neutral);
+    s3.write(s3_neutral);
+
+    delay(1000);
 }
 
 void loop() {
@@ -80,4 +157,10 @@ void loop() {
 
         print_state(state);
     }
+
+    // Keep swimming
+    fishWave();
+
+    // Apply fin angles
+    updateSideFins();
 }
