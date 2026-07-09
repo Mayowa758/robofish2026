@@ -87,24 +87,35 @@ void fishWave() {
     int amp = map(state.speed, 0, 20, 10, 30);
     int speedDelay = map(state.speed, 0, 20, 40, 10);
 
-    // if (state.speed > 1 && (millis() - lastWaveUpdate >= speedDelay )) {
+    // Serial.print("Amp: ");
 
-    //     lastWaveUpdate = millis();
+    // Serial.println(amp);
 
-    //     wavePosition += waveDirection;
 
-    //     if (wavePosition >= amp) {
-    //         waveDirection = -1;
-    //     }
+    // Serial.print("Speed Delay: ");
 
-    //     if (wavePosition <= -amp) {
-    //         waveDirection = 1;
-    //     }
+    // Serial.println(speedDelay);
 
-    //     wavePosition = constrain(wavePosition, -amp, amp);
+    if (state.speed > 1 && (millis() - lastWaveUpdate >= speedDelay*100 )) {
 
-    //     s1.write(constrain(s1_neutral + wavePosition, 0, 180));
-    // }
+        lastWaveUpdate = millis();
+
+        wavePosition += waveDirection;
+
+        if (wavePosition >= amp) {
+            waveDirection = -1;
+        }
+
+        if (wavePosition <= -amp) {
+            waveDirection = 1;
+        }
+
+        // wavePosition = constrain(wavePosition, -amp, amp);
+        Serial.print("S1 Write:");
+        Serial.println(constrain(s1_neutral + wavePosition, 0, 180));
+
+        s1.write(constrain(s1_neutral + wavePosition, 0, 180));
+    }
 }
 
 void updateSideFins() {
@@ -156,7 +167,7 @@ void loop() {
         FishState targetState = decode_state(int_message);
         tickState(targetState);
 
-        print_state(state);
+        // print_state(state);
     }
 
     // Keep swimming
