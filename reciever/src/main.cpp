@@ -8,7 +8,7 @@ Servo s1;
 Servo s2;
 Servo s3;
 
-const int S1_PIN = 9;
+const int S1_PIN = 26;
 const int S2_PIN = 27;
 const int S3_PIN = 7;
 
@@ -87,24 +87,24 @@ void fishWave() {
     int amp = map(state.speed, 0, 20, 10, 30);
     int speedDelay = map(state.speed, 0, 20, 40, 10);
 
-    if (millis() - lastWaveUpdate >= speedDelay) {
+    // if (state.speed > 1 && (millis() - lastWaveUpdate >= speedDelay )) {
 
-        lastWaveUpdate = millis();
+    //     lastWaveUpdate = millis();
 
-        wavePosition += waveDirection;
+    //     wavePosition += waveDirection;
 
-        if (wavePosition >= amp) {
-            waveDirection = -1;
-        }
+    //     if (wavePosition >= amp) {
+    //         waveDirection = -1;
+    //     }
 
-        if (wavePosition <= -amp) {
-            waveDirection = 1;
-        }
+    //     if (wavePosition <= -amp) {
+    //         waveDirection = 1;
+    //     }
 
-        wavePosition = constrain(wavePosition, -amp, amp);
+    //     wavePosition = constrain(wavePosition, -amp, amp);
 
-        s1.write(constrain(s1_neutral + wavePosition, 0, 180));
-    }
+    //     s1.write(constrain(s1_neutral + wavePosition, 0, 180));
+    // }
 }
 
 void updateSideFins() {

@@ -27,7 +27,7 @@ extern "C" {
 struct FishState {
     int8_t leftFin = 0;
     int8_t rightFin = 0;
-    uint8_t speed = 0;
+    uint8_t speed = 1;
     uint8_t calibrate = 0;
 }; 
 
