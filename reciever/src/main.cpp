@@ -10,7 +10,7 @@ Servo s3;
 
 const int S1_PIN = 26;
 const int S2_PIN = 27;
-const int S3_PIN = 7;
+const int S3_PIN = 25;
 
 int s1_neutral = 90;
 int s2_neutral = 90;
@@ -85,22 +85,16 @@ void print_state(FishState state) {
 void fishWave() {
 
     int amp = map(state.speed, 0, 20, 10, 30);
-    int speedDelay = map(state.speed, 0, 20, 40, 10);
+    int speedDelay = map(state.speed, 0, 20, 20, 5);
+    if (state.speed <= 1) return; 
 
-    // Serial.print("Amp: ");
-
-    // Serial.println(amp);
-
-
-    // Serial.print("Speed Delay: ");
-
-    // Serial.println(speedDelay);
-
-    if (state.speed > 1 && (millis() - lastWaveUpdate >= speedDelay*100 )) {
+    if (state.speed > 1 && (millis() - lastWaveUpdate >= speedDelay )) {
 
         lastWaveUpdate = millis();
 
         wavePosition += waveDirection;
+
+        wavePosition = constrain(wavePosition, -amp, amp);
 
         if (wavePosition >= amp) {
             waveDirection = -1;
@@ -110,11 +104,12 @@ void fishWave() {
             waveDirection = 1;
         }
 
-        // wavePosition = constrain(wavePosition, -amp, amp);
-        Serial.print("S1 Write:");
-        Serial.println(constrain(s1_neutral + wavePosition, 0, 180));
+        int targetAngle = constrain(s1_neutral + wavePosition, 0, 180);
 
-        s1.write(constrain(s1_neutral + wavePosition, 0, 180));
+        // Serial.print("S1 Write:");
+        // Serial.println(targetAngle);
+
+        s1.write(targetAngle);
     }
 }
 
@@ -167,7 +162,7 @@ void loop() {
         FishState targetState = decode_state(int_message);
         tickState(targetState);
 
-        // print_state(state);
+        print_state(state);
     }
 
     // Keep swimming
