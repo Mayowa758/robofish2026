@@ -5,8 +5,13 @@
 #include <WiFi.h>
 
 /* Wifi Connection */
-// const char *ssid = "Cool";
-// const char *password = "guitariscool";
+const char *ssid = "hotspot";
+const char *password = "hotspot_password";
+
+WiFiServer server(23);
+WiFiClient debugClient;
+
+// run nc 10.145.114.128 23 in terminal to see ouput
 
 /* Servo STUFF */
 
@@ -79,21 +84,21 @@ void tickState(FishState targetState)
 }
 void print_state(FishState state)
 {
-    Serial.println("--- Fish State ---");
+    String msg = "";
 
-    Serial.print("Left Fin:  ");
-    Serial.println(state.leftFin);
+    msg += "--- Fish State ---\n";
+    msg += "Left Fin:  " + String(state.leftFin) + "\n";
+    msg += "Right Fin: " + String(state.rightFin) + "\n";
+    msg += "Speed:     " + String(state.speed) + "\n";
+    msg += "Calibrate: " + String(state.calibrate) + "\n";
+    msg += "------------------\n";
 
-    Serial.print("Right Fin: ");
-    Serial.println(state.rightFin);
+    Serial.print(msg);
 
-    Serial.print("Speed:     ");
-    Serial.println(state.speed);
-
-    Serial.print("Calibrate: ");
-    Serial.println(state.calibrate);
-
-    Serial.println("------------------");
+    if (debugClient && debugClient.connected())
+    {
+        debugClient.print(msg);
+    }
 }
 
 void fishWave()
@@ -158,7 +163,7 @@ void calibrateServos()
 void setup()
 {
     Serial.begin(115200);
-
+    Serial.println("HeLLo");
     Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
 
     s1.attach(S1_PIN);
@@ -169,30 +174,52 @@ void setup()
     s1.write(s1_neutral);
     s2.write(s2_neutral);
     s3.write(s3_neutral);
-    Serial.println("HeLLo");
 
-    // WiFi.begin(ssid, password);
-    // Serial.println("PASSWORD");
+    WiFi.begin(ssid, password);
+    Serial.println("PASSWORD");
 
-    // Enable WiFi Connection
-    // if (WiFi.status() != WL_CONNECTED)
-    // {
-    //     delay(500);
-    //     Serial.println("Hi");
-    // }
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(500);
+        Serial.print(".");
+    }
 
-    // ArduinoOTA.setHostname("robofish");
+    Serial.println();
+    Serial.println("Connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+
+    ArduinoOTA.setHostname("robofish");
     // ArduinoOTA.setPassword("fish");
 
-    // ArduinoOTA.begin(); // Starts OTA
+    ArduinoOTA.onStart([]()
+                       { Serial.println("OTA Update Started"); });
+
+    ArduinoOTA.onEnd([]()
+                     { Serial.println("\nOTA Finished"); });
+
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
+                          { Serial.printf("Progress: %u%%\r", (progress * 100) / total); });
+
+    ArduinoOTA.onError([](ota_error_t error)
+                       { Serial.printf("Error[%u]\n", error); });
+
+    ArduinoOTA.begin(); // Starts OTA
+
+    server.begin();
 
     delay(1000);
 }
 
 void loop()
 {
-    Serial1.println("hello!");
-    // ArduinoOTA.handle();
+    ArduinoOTA.handle();
+
+    if (!debugClient || !debugClient.connected())
+    {
+        debugClient = server.accept();
+    }
+
     if (Serial1.available())
     {
         String message = Serial1.readStringUntil('\n');
