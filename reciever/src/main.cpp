@@ -5,8 +5,8 @@
 #include <WiFi.h>
 
 /* Wifi Connection */
-const char *ssid = "robofish";
-const char *password = "fih";
+// const char *ssid = "Cool";
+// const char *password = "guitariscool";
 
 /* Servo STUFF */
 
@@ -169,23 +169,30 @@ void setup()
     s1.write(s1_neutral);
     s2.write(s2_neutral);
     s3.write(s3_neutral);
+    Serial.println("HeLLo");
 
-    WiFi.begin(ssid, password);
+    // WiFi.begin(ssid, password);
+    // Serial.println("PASSWORD");
 
     // Enable WiFi Connection
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        delay(500);
-    }
+    // if (WiFi.status() != WL_CONNECTED)
+    // {
+    //     delay(500);
+    //     Serial.println("Hi");
+    // }
 
-    ArduinoOTA.begin(); // Starts OTA
+    // ArduinoOTA.setHostname("robofish");
+    // ArduinoOTA.setPassword("fish");
+
+    // ArduinoOTA.begin(); // Starts OTA
 
     delay(1000);
 }
 
 void loop()
 {
-    ArduinoOTA.handle();
+    Serial1.println("hello!");
+    // ArduinoOTA.handle();
     if (Serial1.available())
     {
         String message = Serial1.readStringUntil('\n');
