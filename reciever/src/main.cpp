@@ -87,24 +87,24 @@ void fishWave() {
     int amp = map(state.speed, 0, 20, 10, 30);
     int speedDelay = map(state.speed, 0, 20, 40, 10);
 
-    // if (state.speed > 1 && (millis() - lastWaveUpdate >= speedDelay )) {
+    if (state.speed > 0 && (millis() - lastWaveUpdate >= speedDelay )) {
 
-    //     lastWaveUpdate = millis();
+        lastWaveUpdate = millis();
 
-    //     wavePosition += waveDirection;
+        wavePosition += waveDirection;
 
-    //     if (wavePosition >= amp) {
-    //         waveDirection = -1;
-    //     }
+        if (wavePosition >= amp) {
+            waveDirection = -1;
+        }
 
-    //     if (wavePosition <= -amp) {
-    //         waveDirection = 1;
-    //     }
+        if (wavePosition <= -amp) {
+            waveDirection = 1;
+        }
 
-    //     wavePosition = constrain(wavePosition, -amp, amp);
+        wavePosition = constrain(wavePosition, -amp, amp);
 
-    //     s1.write(constrain(s1_neutral + wavePosition, 0, 180));
-    // }
+        s1.write(constrain(s1_neutral + wavePosition, 0, 180));
+    }
 }
 
 void updateSideFins() {
