@@ -137,8 +137,8 @@ void fishWave()
 
 void updateSideFins()
 {
-    s2.write(constrain(s2_neutral + state.leftFin, FIN_MIN ,FIN_MAX));
-    s3.write(constrain(s3_neutral + state.rightFin, FIN_MIN ,FIN_MAX));
+    s2.write(s2_neutral + constrain(state.leftFin, FIN_MIN, FIN_MAX));
+    s3.write(s3_neutral + constrain(state.rightFin, FIN_MIN, FIN_MAX));
 }
 
 void calibrateServos()
