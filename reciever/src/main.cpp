@@ -5,8 +5,8 @@
 #include <WiFi.h>
 
 /* Wifi Connection */
-const char *ssid = "hotspot";
-const char *password = "hotspot_password";
+const char *ssid = "";
+const char *password = "";
 
 WiFiServer server(23);
 WiFiClient debugClient;
