@@ -8,9 +8,9 @@ Servo s1;
 Servo s2;
 Servo s3;
 
-const int S1_PIN = 26;
-const int S2_PIN = 27;
-const int S3_PIN = 25;
+const int S1_PIN = 38;
+const int S2_PIN = 39;
+const int S3_PIN = 40;
 
 int s1_neutral = 90;
 int s2_neutral = 90;
@@ -162,32 +162,27 @@ void setup()
 
 void loop()
 {
-    // ArduinoOTA.handle();
 
-    // if (!debugClient || !debugClient.connected())
+    // if (Serial1.available())
     // {
-    //     debugClient = server.accept();
+    //     String message = Serial1.readStringUntil('\n');
+    //     message.trim();
+
+    //     uint32_t int_message = (uint32_t)strtoul(message.c_str(), NULL, 10);
+
+    //     FishState targetState = decode_state(int_message);
+    //     tickState(targetState);
+
+    //     print_state(state);
     // }
 
-    if (Serial1.available())
-    {
-        String message = Serial1.readStringUntil('\n');
-        message.trim();
+    // // Keep swimming
+    // fishWave();
 
-        uint32_t int_message = (uint32_t)strtoul(message.c_str(), NULL, 10);
-
-        FishState targetState = decode_state(int_message);
-        tickState(targetState);
-
-        print_state(state);
-    }
-
-    // Keep swimming
-    fishWave();
-
-    // Apply fin angles
-    updateSideFins();
+    // // Apply fin angles
+    // updateSideFins();
 
     Serial.print("Hi");
     delay(1000);
+    s2.write(0);
 }
