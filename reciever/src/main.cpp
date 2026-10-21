@@ -23,6 +23,9 @@ const int S1_PIN = 26;
 const int S2_PIN = 27;
 const int S3_PIN = 25;
 
+const int FIN_MIN = -70;
+const int FIN_MAX = 70;
+
 int s1_neutral = 90;
 int s2_neutral = 90;
 int s3_neutral = 90;
@@ -139,8 +142,8 @@ void fishWave()
 
 void updateSideFins()
 {
-    s2.write(constrain(s2_neutral + state.leftFin, 0, 180));
-    s3.write(constrain(s3_neutral + state.rightFin, 0, 180));
+    s2.write(s2_neutral + constrain(state.leftFin, FIN_MIN, FIN_MAX));
+    s3.write(s3_neutral + constrain(state.rightFin, FIN_MIN, FIN_MAX));
 }
 
 void calibrateServos()
