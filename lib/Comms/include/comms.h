@@ -8,8 +8,8 @@ extern "C"
 {
 #endif
 
-#define FIN_MIN -90
-#define FIN_MAX 90
+#define FIN_MIN -70
+#define FIN_MAX 70
 
 #define SPEED_MAX 20
 #define SPEED_MIN 1

@@ -16,7 +16,7 @@
             "projectEnvName": "esp32dev",
             "toolchainBinDir": "/Users/Mayowa_1/.platformio/packages/toolchain-xtensa-esp-elf/bin",
             "internalConsoleOptions": "openOnSessionStart",
-            "svdPath": "/Users/Mayowa_1/.platformio/platforms/espressif32/misc/svd/esp32s3.svd",
+            "svdPath": "/Users/Mayowa_1/.platformio/platforms/espressif32@src-88f34194123b4b05ff6ef6b8e68c7f60/misc/svd/esp32s3.svd",
             "preLaunchTask": {
                 "type": "PlatformIO",
                 "task": "Pre-Debug"
@@ -30,7 +30,7 @@
             "projectEnvName": "esp32dev",
             "toolchainBinDir": "/Users/Mayowa_1/.platformio/packages/toolchain-xtensa-esp-elf/bin",
             "internalConsoleOptions": "openOnSessionStart",
-            "svdPath": "/Users/Mayowa_1/.platformio/platforms/espressif32/misc/svd/esp32s3.svd"
+            "svdPath": "/Users/Mayowa_1/.platformio/platforms/espressif32@src-88f34194123b4b05ff6ef6b8e68c7f60/misc/svd/esp32s3.svd"
         },
         {
             "type": "platformio-debug",
@@ -40,7 +40,7 @@
             "projectEnvName": "esp32dev",
             "toolchainBinDir": "/Users/Mayowa_1/.platformio/packages/toolchain-xtensa-esp-elf/bin",
             "internalConsoleOptions": "openOnSessionStart",
-            "svdPath": "/Users/Mayowa_1/.platformio/platforms/espressif32/misc/svd/esp32s3.svd",
+            "svdPath": "/Users/Mayowa_1/.platformio/platforms/espressif32@src-88f34194123b4b05ff6ef6b8e68c7f60/misc/svd/esp32s3.svd",
             "loadMode": "manual"
         }
     ]

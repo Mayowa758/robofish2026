@@ -73,14 +73,21 @@ void tickState(FishState targetState)
 }
 void print_state(FishState state)
 {
-    String msg = "";
+    Serial.println("--- Fish State ---");
 
-    msg += "--- Fish State ---\n";
-    msg += "Left Fin:  " + String(state.leftFin) + "\n";
-    msg += "Right Fin: " + String(state.rightFin) + "\n";
-    msg += "Speed:     " + String(state.speed) + "\n";
-    msg += "Calibrate: " + String(state.calibrate) + "\n";
-    msg += "------------------\n";
+    Serial.print("Left Fin:  ");
+    Serial.println(state.leftFin);
+
+    Serial.print("Right Fin: ");
+    Serial.println(state.rightFin);
+
+    Serial.print("Speed:     ");
+    Serial.println(state.speed);
+
+    Serial.print("Calibrate: ");
+    Serial.println(state.calibrate);
+
+    Serial.println("------------------");
 }
 
 void fishWave()
@@ -145,7 +152,7 @@ void calibrateServos()
 void setup()
 {
     Serial.begin(115200);
-    Serial.println("HeLLo");
+
     Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
 
     s1.attach(S1_PIN);
@@ -162,27 +169,22 @@ void setup()
 
 void loop()
 {
+    if (Serial1.available())
+    {
+        String message = Serial1.readStringUntil('\n');
+        message.trim();
 
-    // if (Serial1.available())
-    // {
-    //     String message = Serial1.readStringUntil('\n');
-    //     message.trim();
+        uint32_t int_message = (uint32_t)strtoul(message.c_str(), NULL, 10);
 
-    //     uint32_t int_message = (uint32_t)strtoul(message.c_str(), NULL, 10);
+        FishState targetState = decode_state(int_message);
+        tickState(targetState);
 
-    //     FishState targetState = decode_state(int_message);
-    //     tickState(targetState);
+        print_state(state);
+    }
 
-    //     print_state(state);
-    // }
+    // Keep swimming
+    fishWave();
 
-    // // Keep swimming
-    // fishWave();
-
-    // // Apply fin angles
-    // updateSideFins();
-
-    Serial.print("Hi");
-    delay(1000);
-    s2.write(0);
+    // Apply fin angles
+    updateSideFins();
 }
