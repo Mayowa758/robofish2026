@@ -1,17 +1,6 @@
 #include <Arduino.h>
 #include <comms.h>
 #include <ESP32Servo.h>
-#include <ArduinoOTA.h>
-#include <WiFi.h>
-
-/* Wifi Connection */
-const char *ssid = "";
-const char *password = "";
-
-WiFiServer server(23);
-WiFiClient debugClient;
-
-// run nc 10.145.114.128 23 in terminal to see ouput
 
 /* Servo STUFF */
 
@@ -22,9 +11,6 @@ Servo s3;
 const int S1_PIN = 26;
 const int S2_PIN = 27;
 const int S3_PIN = 25;
-
-const int FIN_MIN = -70;
-const int FIN_MAX = 70;
 
 int s1_neutral = 90;
 int s2_neutral = 90;
@@ -95,13 +81,6 @@ void print_state(FishState state)
     msg += "Speed:     " + String(state.speed) + "\n";
     msg += "Calibrate: " + String(state.calibrate) + "\n";
     msg += "------------------\n";
-
-    Serial.print(msg);
-
-    if (debugClient && debugClient.connected())
-    {
-        debugClient.print(msg);
-    }
 }
 
 void fishWave()
@@ -178,50 +157,17 @@ void setup()
     s2.write(s2_neutral);
     s3.write(s3_neutral);
 
-    WiFi.begin(ssid, password);
-    Serial.println("PASSWORD");
-
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        delay(500);
-        Serial.print(".");
-    }
-
-    Serial.println();
-    Serial.println("Connected!");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
-
-    ArduinoOTA.setHostname("robofish");
-    // ArduinoOTA.setPassword("fish");
-
-    ArduinoOTA.onStart([]()
-                       { Serial.println("OTA Update Started"); });
-
-    ArduinoOTA.onEnd([]()
-                     { Serial.println("\nOTA Finished"); });
-
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
-                          { Serial.printf("Progress: %u%%\r", (progress * 100) / total); });
-
-    ArduinoOTA.onError([](ota_error_t error)
-                       { Serial.printf("Error[%u]\n", error); });
-
-    ArduinoOTA.begin(); // Starts OTA
-
-    server.begin();
-
     delay(1000);
 }
 
 void loop()
 {
-    ArduinoOTA.handle();
+    // ArduinoOTA.handle();
 
-    if (!debugClient || !debugClient.connected())
-    {
-        debugClient = server.accept();
-    }
+    // if (!debugClient || !debugClient.connected())
+    // {
+    //     debugClient = server.accept();
+    // }
 
     if (Serial1.available())
     {
@@ -241,4 +187,7 @@ void loop()
 
     // Apply fin angles
     updateSideFins();
+
+    Serial.print("Hi");
+    delay(1000);
 }
