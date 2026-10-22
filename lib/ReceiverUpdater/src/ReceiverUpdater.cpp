@@ -1,98 +1,145 @@
-
 #include "ReceiverUpdater.h"
-#include "FirmwareUpdateProtocol.h"
 #include <Update.h>
 
-using namespace FirmwareUpdateProtocol;
+using namespace proto;
 
-bool receiverUpdateRequested(HardwareSerial &link)
+static const uint32_t IDLE_ABORT_MS = 15000;
+
+void UpdateModule::ack(Endpoint &link, uint8_t op)
 {
-    return link.available() > 0 && link.peek() == UPDATE_REQUEST;
+    link.send(Subsys::UPDATE, update::ACK, {(int32_t)op, (int32_t)received_});
 }
 
-void handleReceiverUpdate(HardwareSerial &link)
+void UpdateModule::nack(Endpoint &link, uint8_t op, int32_t err)
 {
-    link.read(); // Consume 'U'
+    link.send(Subsys::UPDATE, update::NACK, {(int32_t)op, err, (int32_t)received_});
+}
 
-    Serial.println("[RX] Update request received");
+void UpdateModule::abortUpdate()
+{
+    if (active_)
+        ::Update.abort();
+    active_ = false;
+    size_ = received_ = lastChunkLen_ = 0;
+}
 
-    uint32_t firmwareSize = 0;
-
-    if (link.readBytes(
-            (uint8_t *)&firmwareSize,
-            sizeof(firmwareSize)) != sizeof(firmwareSize))
+void UpdateModule::tick()
+{
+    if (active_ && millis() - lastActivityMs_ > IDLE_ABORT_MS)
     {
-        Serial.println("[RX] Failed to read firmware size");
-        link.write(NACK);
-        return;
+        Serial.println("[RX] Update timed out, aborting");
+        abortUpdate();
     }
+}
 
-    Serial.printf(
-        "[RX] Firmware size: %lu bytes\n",
-        (unsigned long)firmwareSize);
+void UpdateModule::handle(const Packet &p, Endpoint &link)
+{
+    lastActivityMs_ = millis();
 
-    if (firmwareSize == 0 || !Update.begin(firmwareSize))
+    switch (p.opcode)
     {
-        Serial.printf(
-            "[RX] Update.begin failed: %d\n",
-            Update.getError());
-
-        link.write(NACK);
-        return;
-    }
-
-    link.write(ACK);
-    link.flush();
-
-    uint8_t buffer[CHUNK_SIZE];
-    uint32_t received = 0;
-
-    while (received < firmwareSize)
+    case update::BEGIN:
     {
-        size_t wanted = min(
-            (uint32_t)sizeof(buffer),
-            firmwareSize - received);
-
-        size_t count = link.readBytes(buffer, wanted);
-
-        if (count != wanted)
+        abortUpdate();
+        if (p.argc < 1 || p.args[0] <= 0)
         {
-            Serial.println("[RX] Transfer timed out");
-            Update.abort();
-            link.write(NACK);
+            nack(link, p.opcode, update::ERR_BAD_ARGS);
+            return;
+        }
+        size_ = (uint32_t)p.args[0];
+        Serial.printf("[RX] Update request: %lu bytes\n", (unsigned long)size_);
+
+        if (!::Update.begin(size_))
+        {
+            Serial.printf("[RX] Update.begin failed: %d\n", ::Update.getError());
+            size_ = 0;
+            nack(link, p.opcode, update::ERR_BEGIN_FAILED);
+            return;
+        }
+        active_ = true;
+        received_ = 0;
+        lastChunkLen_ = 0;
+        ack(link, p.opcode);
+        return;
+    }
+
+    case update::CHUNK:
+    {
+        if (!active_)
+        {
+            nack(link, p.opcode, update::ERR_NOT_ACTIVE);
+            return;
+        }
+        if (p.argc < 1 || p.bodyLen == 0)
+        {
+            nack(link, p.opcode, update::ERR_BAD_ARGS);
             return;
         }
 
-        if (Update.write(buffer, count) != count)
+        uint32_t offset = (uint32_t)p.args[0];
+
+        // Our ACK got lost and the transmitter resent the chunk we already wrote: just ACK again.
+        if (lastChunkLen_ && offset + lastChunkLen_ == received_ && p.bodyLen == lastChunkLen_)
+        {
+            ack(link, p.opcode);
+            return;
+        }
+        // Anything else out of order: tell the transmitter where we actually are.
+        if (offset != received_ || received_ + p.bodyLen > size_)
+        {
+            nack(link, p.opcode, update::ERR_BAD_OFFSET);
+            return;
+        }
+
+        if (::Update.write((uint8_t *)p.body, p.bodyLen) != p.bodyLen)
         {
             Serial.println("[RX] Flash write failed");
-            Update.abort();
-            link.write(NACK);
+            abortUpdate();
+            nack(link, p.opcode, update::ERR_WRITE_FAILED);
             return;
         }
-
-        received += count;
-
-        link.write(ACK);
-        link.flush();
+        received_ += p.bodyLen;
+        lastChunkLen_ = p.bodyLen;
+        ack(link, p.opcode);
+        return;
     }
 
-    if (Update.end(true))
+    case update::END:
     {
-        Serial.println("[RX] Update successful. Restarting...");
-
-        link.write(ACK);
-        link.flush();
-
-        delay(200);
-        ESP.restart();
+        if (!active_)
+        {
+            nack(link, p.opcode, update::ERR_NOT_ACTIVE);
+            return;
+        }
+        if (received_ != size_)
+        {
+            nack(link, p.opcode, update::ERR_INCOMPLETE);
+            return;
+        }
+        if (::Update.end(true))
+        {
+            Serial.println("[RX] Update successful. Restarting...");
+            active_ = false;
+            ack(link, p.opcode);
+            link.stream().flush();
+            delay(200);
+            ESP.restart();
+        }
+        else
+        {
+            Serial.printf("[RX] Update finalisation failed: %d\n", ::Update.getError());
+            abortUpdate();
+            nack(link, p.opcode, update::ERR_END_FAILED);
+        }
+        return;
     }
-    else
-    {
-        Serial.printf(
-            "[RX] Update finalisation failed: %d\n",
-            Update.getError());
 
-        link.write(NACK);
+    case update::ABORT:
+        abortUpdate();
+        ack(link, p.opcode);
+        return;
+
+    default:
+        break; // ACK/NACK are receiver -> transmitter only
     }
 }
