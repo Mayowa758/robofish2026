@@ -1,6 +1,6 @@
 # robofish2026
 
-Robotic fish. A **transmitter** (gamepad in, serial terminal out) talks over a UART link to a **receiver** that drives the servos.
+A **transmitter** (gamepad in, serial terminal out) talks over a UART link to a **receiver** that drives the servos.
 Everything that crosses the link follows one protocol, so new features (sensors, camera, ...) can be added without touching the rest.
 
 Specifications
@@ -116,15 +116,6 @@ Both boards only need `lib/Protocol` (`lib_extra_dirs = ../lib`). PlatformIO tre
 2. Open the transmitter's serial monitor and send `u`.
 3. Watch the progress (`[TX] Sent 16384 / ... bytes`). On success the receiver reboots with the new firmware and the transmitter prints `Update successful`.
 
-## Tests
-
-Protocol (CRC, framing, resync, binary bodies, text messages), no hardware:
-
-```
-cd lib/Protocol/test
-g++ -std=c++11 -I../include ../src/Protocol.cpp test_protocol.cpp -o t && ./t
-```
-
 ## Adding a feature
 
 1. Add an id to `proto::Subsys` (and an opcode namespace) in `Protocol.h`.
@@ -136,4 +127,3 @@ g++ -std=c++11 -I../include ../src/Protocol.cpp test_protocol.cpp -o t && ./t
 
 - Sensors (gyro etc.): protocol ids exist, no code.
 - GUI on the PC (the tagged terminal lines are designed to feed it). Camera would be another box.
-- Fins hold their position during a firmware update (only the tail wave pauses).
