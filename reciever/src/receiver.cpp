@@ -374,6 +374,14 @@ void setup()
     ESP32PWM::allocateTimer(2);
     ESP32PWM::allocateTimer(3);
 
+    s1.setPeriodHertz(50);
+    s2.setPeriodHertz(50);
+    s3.setPeriodHertz(50);
+
+    bool ok1 = s1.attach(S1_PIN, 500, 2400);
+    bool ok2 = s2.attach(S2_PIN, 500, 2400);
+    bool ok3 = s3.attach(S3_PIN, 500, 2400);
+
     s1.attach(S1_PIN);
     s2.attach(S2_PIN);
     s3.attach(S3_PIN);
@@ -384,19 +392,10 @@ void setup()
 
     Serial.println("[RX] Ready");
     s1.write(0);
-    s3.write(0);
 }
 
 void loop()
 {
-
-    s1.write(180);
-    s3.write(0);
-
-    delay(1000);
-
-    s1.write(0);
-    s3.write(180);
 
     while (Serial1.available() > 0)
     {
