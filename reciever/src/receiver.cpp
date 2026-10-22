@@ -190,99 +190,16 @@
 // }
 
 #include <Arduino.h>
-#include <Update.h>
+#include "ReceiverUpdater.h"
 
 #define RX1_PIN 14
 #define TX1_PIN 12
 #define LED 2
 
-// CHANGE THIS VALUE TO TEST A DIFFERENT BLINK RATE
 const unsigned long BLINK_INTERVAL = 500;
 
 unsigned long previousBlink = 0;
 bool ledState = LOW;
-
-void handleUpdate()
-{
-    Serial1.read(); // Consume 'U'
-
-    Serial.println("[RX] Update request received");
-
-    uint32_t firmwareSize = 0;
-
-    if (Serial1.readBytes(
-            (uint8_t *)&firmwareSize,
-            sizeof(firmwareSize)) != sizeof(firmwareSize))
-    {
-        Serial.println("[RX] Failed to read firmware size");
-        Serial1.write('N');
-        return;
-    }
-
-    Serial.printf("[RX] Firmware size: %lu bytes\n",
-                  (unsigned long)firmwareSize);
-
-    if (firmwareSize == 0 || !Update.begin(firmwareSize))
-    {
-        Serial.printf("[RX] Update.begin failed: %d\n",
-                      Update.getError());
-        Serial1.write('N');
-        return;
-    }
-
-    Serial1.write('A');
-    Serial1.flush();
-
-    uint8_t buffer[512];
-    uint32_t received = 0;
-
-    while (received < firmwareSize)
-    {
-        size_t wanted = min(
-            (uint32_t)sizeof(buffer),
-            firmwareSize - received);
-
-        size_t count = Serial1.readBytes(buffer, wanted);
-
-        if (count != wanted)
-        {
-            Serial.println("[RX] Transfer timed out");
-            Update.abort();
-            Serial1.write('N');
-            return;
-        }
-
-        if (Update.write(buffer, count) != count)
-        {
-            Serial.println("[RX] Flash write failed");
-            Update.abort();
-            Serial1.write('N');
-            return;
-        }
-
-        received += count;
-
-        Serial1.write('A');
-        Serial1.flush();
-    }
-
-    if (Update.end(true))
-    {
-        Serial.println("[RX] Update successful. Restarting...");
-
-        Serial1.write('A');
-        Serial1.flush();
-
-        delay(200);
-        ESP.restart();
-    }
-    else
-    {
-        Serial.printf("[RX] Update finalisation failed: %d\n",
-                      Update.getError());
-        Serial1.write('N');
-    }
-}
 
 void setup()
 {
@@ -298,14 +215,12 @@ void setup()
 
 void loop()
 {
-    // Prioritise firmware updates over normal operation.
-    if (Serial1.available() > 0 && Serial1.peek() == 'U')
+    if (receiverUpdateRequested(Serial1))
     {
-        handleUpdate();
+        handleReceiverUpdate(Serial1);
         return;
     }
 
-    // Blink continuously without blocking the update handler.
     unsigned long currentTime = millis();
 
     if (currentTime - previousBlink >= BLINK_INTERVAL)

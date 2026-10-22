@@ -123,97 +123,10 @@
 
 #include <Arduino.h>
 #include "receiver_firmware.h"
+#include "TransmitterUpdater.h"
 
 #define RX1_PIN 14
 #define TX1_PIN 12
-
-bool waitAck(uint32_t timeout_ms)
-{
-  uint32_t start = millis();
-
-  while (millis() - start < timeout_ms)
-  {
-    if (Serial1.available())
-    {
-      int response = Serial1.read();
-
-      if (response == 'A')
-        return true;
-
-      if (response == 'N')
-      {
-        Serial.println("[ERROR] Receiver rejected the update.");
-        return false;
-      }
-
-      Serial.printf("[WARN] Unexpected response: 0x%02X\n", response);
-    }
-
-    delay(1);
-  }
-
-  Serial.println("[ERROR] ACK timeout.");
-  return false;
-}
-
-bool sendUpdate(const uint8_t *fw, uint32_t size)
-{
-  Serial.println("[TX] Sending update request...");
-
-  Serial1.write('U');
-  Serial1.write((uint8_t *)&size, sizeof(size));
-  Serial1.flush();
-
-  if (!waitAck(3000))
-  {
-    Serial.println("[ERROR] Receiver did not acknowledge update request.");
-    return false;
-  }
-
-  Serial.println("[TX] Receiver ready. Sending firmware...");
-
-  uint32_t offset = 0;
-
-  while (offset < size)
-  {
-    size_t chunk = min((uint32_t)512, size - offset);
-
-    if (Serial1.write(fw + offset, chunk) != chunk)
-    {
-      Serial.println("[ERROR] UART write failed.");
-      return false;
-    }
-
-    Serial1.flush();
-
-    if (!waitAck(5000))
-    {
-      Serial.printf("[ERROR] Failed at byte %lu of %lu\n",
-                    (unsigned long)offset,
-                    (unsigned long)size);
-      return false;
-    }
-
-    offset += chunk;
-
-    if (offset % 16384 == 0 || offset == size)
-    {
-      Serial.printf("[TX] Sent %lu / %lu bytes\n",
-                    (unsigned long)offset,
-                    (unsigned long)size);
-    }
-  }
-
-  Serial.println("[TX] Waiting for final confirmation...");
-
-  if (!waitAck(10000))
-  {
-    Serial.println("[ERROR] Final firmware confirmation failed.");
-    return false;
-  }
-
-  return true;
-}
 
 void setup()
 {
@@ -231,12 +144,17 @@ void loop()
 
     if (input == 'u')
     {
-      Serial.printf("Sending receiver firmware: %lu bytes\n",
-                    (unsigned long)receiverFirmwareSize);
+      Serial.printf(
+          "Sending receiver firmware: %lu bytes\n",
+          (unsigned long)receiverFirmwareSize);
 
-      bool success = sendUpdate(receiverFirmware, receiverFirmwareSize);
+      bool success = sendReceiverFirmware(
+          Serial1,
+          receiverFirmware,
+          receiverFirmwareSize);
 
-      Serial.println(success ? "Update successful" : "Update failed");
+      Serial.println(
+          success ? "Update successful" : "Update failed");
     }
   }
 }
