@@ -114,5 +114,10 @@ void ServoModule::calibrate()
 
 void ServoModule::printState()
 {
+    // The controller re-sends while a button is held; printing every packet at 115200 baud blocks loop().
+    static unsigned long lastPrint = 0;
+    if (millis() - lastPrint < 250)
+        return;
+    lastPrint = millis();
     Serial.printf("[RX] servo: left=%d right=%d speed=%u tailTrim=%d\n", leftFin_, rightFin_, speed_, tailTrim_);
 }
