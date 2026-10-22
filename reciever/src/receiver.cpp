@@ -1,19 +1,22 @@
 // Receiver: servo and sensor are plain functions in this file (no classes of our own).
-// UPDATE (firmware over the link) lives in receiver_update.cpp. Only lib/Protocol is needed. Add a subsystem = add a case in handlePacket().
+// UPDATE (firmware over the link) is written out in this file too.
+// Only lib/Protocol is needed (packet format). Add a subsystem = add a case in handlePacket().
 #include <Arduino.h>
 #include <ESP32Servo.h>
+#include <Update.h>
 #include "Protocol.h"
-#include "receiver_update.h" // handleUpdate(), tickUpdate(), updateIsActive()
 
 #define RX1_PIN 14
 #define TX1_PIN 12
 #define LED 2
 
-#define S1_PIN 38 // tail
+#define S1_PIN 40 // tail
 #define S2_PIN 39 // left fin
-#define S3_PIN 40 // right fin
+#define S3_PIN 38 // right fin
 
-/* SERVO */
+// ============================================================================================
+// State
+// ============================================================================================
 Servo s1, s2, s3; // tail, left fin, right fin
 
 const int NEUTRAL = 90;
@@ -30,11 +33,18 @@ unsigned long lastPrint = 0;
 
 proto::Parser parser; // reads bytes off Serial1 in loop()
 
+bool updateActive = false;
+uint32_t updateSize = 0, updateReceived = 0, lastChunkLen = 0;
+unsigned long lastUpdateActivity = 0;
+const unsigned long UPDATE_IDLE_ABORT_MS = 15000;
+
 const unsigned long BLINK_INTERVAL = 500;
 unsigned long previousBlink = 0;
 bool ledState = LOW;
 
+// ============================================================================================
 // Sending replies (receiver -> transmitter)
+// ============================================================================================
 void sendReply(uint8_t subsys, uint8_t opcode, uint8_t argc, int32_t a0 = 0, int32_t a1 = 0, int32_t a2 = 0, int32_t a3 = 0)
 {
     proto::Packet p;
@@ -52,7 +62,9 @@ void sendReply(uint8_t subsys, uint8_t opcode, uint8_t argc, int32_t a0 = 0, int
         Serial1.write(buf, n);
 }
 
-/* SERVO */
+// ============================================================================================
+// SERVO
+// ============================================================================================
 int smoothStep(int current, int target)
 {
     if (current == target)
@@ -130,6 +142,7 @@ void handleServo(const proto::Packet &p)
     case proto::servo::RESET:
         leftFin = rightFin = tailTrim = 0;
         wavePosition = 0;
+        speedSetting = 1;
         break;
 
     default:
@@ -143,7 +156,7 @@ void handleServo(const proto::Packet &p)
 
 void tickTailWave()
 {
-    if (updateIsActive() || speedSetting <= 1) // servos stay still during a firmware update
+    if (updateActive || speedSetting <= 1) // servos stay still during a firmware update
         return;
 
     int amp = map(speedSetting, 0, 20, 10, 30);
@@ -161,7 +174,9 @@ void tickTailWave()
     }
 }
 
+// ============================================================================================
 // SENSOR   GET {sensor} -> reply DATA {sensor, v0, v1, ...}
+// ============================================================================================
 bool readGyro(int32_t &x, int32_t &y, int32_t &z)
 {
     (void)x;
@@ -185,7 +200,144 @@ void handleSensor(const proto::Packet &p)
     }
 }
 
-// Subsystem
+// ============================================================================================
+// UPDATE   firmware over the link
+// ============================================================================================
+void updateAck(uint8_t op)
+{
+    sendReply(proto::Subsys::UPDATE, proto::update::ACK, 2, op, (int32_t)updateReceived);
+}
+
+void updateNack(uint8_t op, int32_t err)
+{
+    sendReply(proto::Subsys::UPDATE, proto::update::NACK, 3, op, err, (int32_t)updateReceived);
+}
+
+void updateAbort()
+{
+    if (updateActive)
+        Update.abort();
+    updateActive = false;
+    updateSize = updateReceived = lastChunkLen = 0;
+}
+
+void handleUpdate(const proto::Packet &p)
+{
+    lastUpdateActivity = millis();
+
+    switch (p.opcode)
+    {
+    case proto::update::BEGIN:
+        updateAbort();
+        if (p.argc < 1 || p.args[0] <= 0)
+        {
+            updateNack(p.opcode, proto::update::ERR_BAD_ARGS);
+            return;
+        }
+        updateSize = (uint32_t)p.args[0];
+        Serial.printf("[RX] Update request: %lu bytes\n", (unsigned long)updateSize);
+        if (!Update.begin(updateSize))
+        {
+            Serial.printf("[RX] Update.begin failed: %d\n", Update.getError());
+            updateSize = 0;
+            updateNack(p.opcode, proto::update::ERR_BEGIN_FAILED);
+            return;
+        }
+        updateActive = true;
+        updateReceived = 0;
+        lastChunkLen = 0;
+        updateAck(p.opcode);
+        return;
+
+    case proto::update::CHUNK:
+    {
+        if (!updateActive)
+        {
+            updateNack(p.opcode, proto::update::ERR_NOT_ACTIVE);
+            return;
+        }
+        if (p.argc < 1 || p.bodyLen == 0)
+        {
+            updateNack(p.opcode, proto::update::ERR_BAD_ARGS);
+            return;
+        }
+        uint32_t offset = (uint32_t)p.args[0];
+
+        // Our ACK got lost and the chunk was resent: just ACK again.
+        if (lastChunkLen && offset + lastChunkLen == updateReceived && p.bodyLen == lastChunkLen)
+        {
+            updateAck(p.opcode);
+            return;
+        }
+        // Out of order: tell the transmitter where we actually are.
+        if (offset != updateReceived || updateReceived + p.bodyLen > updateSize)
+        {
+            updateNack(p.opcode, proto::update::ERR_BAD_OFFSET);
+            return;
+        }
+        if (Update.write((uint8_t *)p.body, p.bodyLen) != p.bodyLen)
+        {
+            Serial.println("[RX] Flash write failed");
+            updateAbort();
+            updateNack(p.opcode, proto::update::ERR_WRITE_FAILED);
+            return;
+        }
+        updateReceived += p.bodyLen;
+        lastChunkLen = p.bodyLen;
+        updateAck(p.opcode);
+        return;
+    }
+
+    case proto::update::END:
+        if (!updateActive)
+        {
+            updateNack(p.opcode, proto::update::ERR_NOT_ACTIVE);
+            return;
+        }
+        if (updateReceived != updateSize)
+        {
+            updateNack(p.opcode, proto::update::ERR_INCOMPLETE);
+            return;
+        }
+        if (Update.end(true))
+        {
+            Serial.println("[RX] Update successful. Restarting...");
+            updateActive = false;
+            updateAck(p.opcode);
+            Serial1.flush();
+            delay(200);
+            ESP.restart();
+        }
+        else
+        {
+            Serial.printf("[RX] Update finalisation failed: %d\n", Update.getError());
+            updateAbort();
+            updateNack(p.opcode, proto::update::ERR_END_FAILED);
+        }
+        return;
+
+    case proto::update::ABORT:
+        updateAbort();
+        updateAck(p.opcode);
+        return;
+
+    default:
+        return;
+    }
+}
+
+void tickUpdateTimeout()
+{
+    if (updateActive && millis() - lastUpdateActivity > UPDATE_IDLE_ABORT_MS)
+    {
+        Serial.println("[RX] Update timed out, aborting");
+        updateAbort();
+    }
+}
+
+// ============================================================================================
+// Dispatch: one packet in, call the right function. New subsystem = new case here.
+// ============================================================================================
 void handlePacket(const proto::Packet &p)
 {
     switch (p.subsys)
@@ -205,6 +357,7 @@ void handlePacket(const proto::Packet &p)
     }
 }
 
+// ============================================================================================
 void setup()
 {
     Serial.begin(115200);
@@ -216,6 +369,11 @@ void setup()
     pinMode(LED, OUTPUT);
     digitalWrite(LED, LOW);
 
+    ESP32PWM::allocateTimer(0);
+    ESP32PWM::allocateTimer(1);
+    ESP32PWM::allocateTimer(2);
+    ESP32PWM::allocateTimer(3);
+
     s1.attach(S1_PIN);
     s2.attach(S2_PIN);
     s3.attach(S3_PIN);
@@ -225,12 +383,21 @@ void setup()
     updateTail(true);
 
     Serial.println("[RX] Ready");
+    s1.write(0);
+    s3.write(0);
 }
 
 void loop()
 {
-    Serial.println("Hello");
+
+    s1.write(180);
+    s3.write(0);
+
     delay(1000);
+
+    s1.write(0);
+    s3.write(180);
+
     while (Serial1.available() > 0)
     {
         int b = Serial1.read();
@@ -241,7 +408,7 @@ void loop()
     }
 
     tickTailWave();
-    tickUpdate();
+    tickUpdateTimeout();
 
     unsigned long now = millis();
     if (now - previousBlink >= BLINK_INTERVAL)
