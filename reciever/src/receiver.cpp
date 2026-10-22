@@ -1,6 +1,6 @@
-#include <Arduino.h>
-#include <comms.h>
-#include <ESP32Servo.h>
+// #include <Arduino.h>
+// #include <comms.h>
+// #include <ESP32Servo.h>
 
 // /* Servo STUFF */
 
@@ -194,29 +194,17 @@
 
 #define RX1_PIN 14
 #define TX1_PIN 12
+#define LED 2
 
-void setup()
+// CHANGE THIS VALUE TO TEST A DIFFERENT BLINK RATE
+const unsigned long BLINK_INTERVAL = 500;
+
+unsigned long previousBlink = 0;
+bool ledState = LOW;
+
+void handleUpdate()
 {
-    Serial.begin(115200);
-    Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
-    Serial1.setTimeout(3000);
-
-    Serial.println("[RX] Firmware receiver ready");
-}
-
-void loop()
-{
-    if (Serial1.available() <= 0)
-        return;
-
-    // Wait for the transmitter's update command.
-    if (Serial1.peek() != 'U')
-    {
-        Serial1.read();
-        return;
-    }
-
-    Serial1.read();
+    Serial1.read(); // Consume 'U'
 
     Serial.println("[RX] Update request received");
 
@@ -242,7 +230,6 @@ void loop()
         return;
     }
 
-    // Receiver is ready to accept firmware.
     Serial1.write('A');
     Serial1.flush();
 
@@ -275,18 +262,13 @@ void loop()
 
         received += count;
 
-        Serial.printf("[RX] Received %lu / %lu bytes\n",
-                      (unsigned long)received,
-                      (unsigned long)firmwareSize);
-
-        // Acknowledge the received chunk.
         Serial1.write('A');
         Serial1.flush();
     }
 
     if (Update.end(true))
     {
-        Serial.println("[RX] Firmware transfer successful");
+        Serial.println("[RX] Update successful. Restarting...");
 
         Serial1.write('A');
         Serial1.flush();
@@ -299,5 +281,37 @@ void loop()
         Serial.printf("[RX] Update finalisation failed: %d\n",
                       Update.getError());
         Serial1.write('N');
+    }
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
+    Serial1.setTimeout(3000);
+
+    pinMode(LED, OUTPUT);
+    digitalWrite(LED, LOW);
+
+    Serial.println("[RX] Blink test ready");
+}
+
+void loop()
+{
+    // Prioritise firmware updates over normal operation.
+    if (Serial1.available() > 0 && Serial1.peek() == 'U')
+    {
+        handleUpdate();
+        return;
+    }
+
+    // Blink continuously without blocking the update handler.
+    unsigned long currentTime = millis();
+
+    if (currentTime - previousBlink >= BLINK_INTERVAL)
+    {
+        previousBlink = currentTime;
+        ledState = !ledState;
+        digitalWrite(LED, ledState);
     }
 }
