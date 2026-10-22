@@ -22,7 +22,23 @@ GamepadPtr gamepad;
 #define DPAD_UP 0x01
 #define DPAD_DOWN 0x02
 
+// Face buttons (Bluepad32 layout: A/B/X/Y = Cross/Circle/Square/Triangle on a PlayStation pad)
+#define CROSS 0x0001
+#define CIRCLE 0x0002
 #define SQUARE 0x0004
+#define TRIANGLE 0x0008
+
+// ---------------- Modes ----------------
+// Hold TRIANGLE and press D-pad UP = SERVO mode, D-pad DOWN = SENSOR mode. A mode stays until changed.
+// L1/L2, R1/R2, d-pad up/down and SQUARE (calibrate) work in every mode.
+// There is no sensor code yet, so the modes only differ in what is shown for now: put per-mode button
+// functions in sendModeCommands().
+enum Mode
+{
+  MODE_SERVO,
+  MODE_SENSOR
+};
+Mode mode = MODE_SERVO;
 
 const unsigned long SEND_INTERVAL = 200; // same rate as the old controller loop
 unsigned long lastSend = 0;
@@ -47,7 +63,9 @@ void sendPacket(uint8_t subsys, uint8_t opcode, std::initializer_list<int32_t> a
     Serial1.write(buf, n);
 }
 
-// Read whatever the receiver sent back (e.g. SENSOR_DATA) and print it.
+// Read whatever the receiver sent back and print it on this terminal:
+//   MESSAGE TEXT -> the receiver's SERVO / SENSOR messages, e.g. "[SERVO] left=5 right=0 speed=1"
+//   SENSOR DATA  -> "[SENSOR] values..." (no sensors yet)
 void readLink()
 {
   while (Serial1.available() > 0)
@@ -59,7 +77,12 @@ void readLink()
       continue;
 
     const Packet &p = linkParser.packet();
-    if (p.subsys == Subsys::SENSOR && p.opcode == sensor::DATA)
+    if (p.subsys == Subsys::MESSAGE && p.opcode == message::TEXT)
+    {
+      Serial.write(p.body, p.bodyLen);
+      Serial.println();
+    }
+    else if (p.subsys == Subsys::SENSOR && p.opcode == sensor::DATA)
     {
       Serial.print("[SENSOR]");
       for (uint8_t i = 0; i < p.argc; i++)
@@ -84,11 +107,28 @@ void onDisconnectedController(GamepadPtr gp)
   gamepad = nullptr;
 }
 
-void sendControllerCommands()
+void setMode(Mode m)
 {
-  uint16_t buttons = gamepad->buttons();
-  uint16_t dpad = gamepad->dpad();
+  if (m == mode)
+    return;
+  mode = m;
+  Serial.println(mode == MODE_SERVO ? "[MODE] SERVO" : "[MODE] SENSOR");
+}
 
+// Runs every loop (not just every SEND_INTERVAL) so a quick combo press is never missed.
+void checkModeSwitch(uint16_t buttons, uint16_t dpad)
+{
+  if (!(buttons & TRIANGLE))
+    return;
+  if (dpad & DPAD_UP)
+    setMode(MODE_SERVO);
+  else if (dpad & DPAD_DOWN)
+    setMode(MODE_SENSOR);
+}
+
+// Active in every mode: the fish keeps swimming, and square calibrates.
+void sendDriveCommands(uint16_t buttons, uint16_t dpad)
+{
   if (buttons & L1)
     sendPacket(Subsys::SERVO, servo::SET_ANGLE, {servo::LEFT, servo::FIN_MAX});
   else if (buttons & L2)
@@ -106,6 +146,27 @@ void sendControllerCommands()
 
   if (buttons & SQUARE)
     sendPacket(Subsys::SERVO, servo::RESET);
+}
+
+// Face-button functions that depend on the mode (cross / circle are free). Nothing yet.
+void sendModeCommands(uint16_t buttons)
+{
+  (void)buttons;
+  switch (mode)
+  {
+  case MODE_SERVO:
+    break; // add servo-mode buttons here
+  case MODE_SENSOR:
+    break; // add sensor-mode buttons here once there are sensors
+  }
+}
+
+void sendControllerCommands(uint16_t buttons, uint16_t dpad)
+{
+  if (buttons & TRIANGLE) // triangle is the mode modifier: no other commands while it is held
+    return;
+  sendDriveCommands(buttons, dpad);
+  sendModeCommands(buttons);
 }
 
 // ============================================================================================
@@ -287,6 +348,7 @@ void setup()
   BP32.forgetBluetoothKeys();
 
   Serial.println("Ready. Send 'u' in Serial Monitor to update receiver.");
+  Serial.println("[MODE] SERVO  (hold triangle + d-pad up = SERVO, + d-pad down = SENSOR)");
 }
 
 void loop()
@@ -297,9 +359,17 @@ void loop()
   if (Serial.available() > 0 && Serial.read() == 'u')
     updateReceiver();
 
-  if (gamepad && gamepad->isConnected() && millis() - lastSend >= SEND_INTERVAL)
+  if (gamepad && gamepad->isConnected())
   {
-    lastSend = millis();
-    sendControllerCommands();
+    uint16_t buttons = gamepad->buttons();
+    uint16_t dpad = gamepad->dpad();
+
+    checkModeSwitch(buttons, dpad);
+
+    if (millis() - lastSend >= SEND_INTERVAL)
+    {
+      lastSend = millis();
+      sendControllerCommands(buttons, dpad);
+    }
   }
 }

@@ -1,9 +1,12 @@
 // Receiver: servo and sensor are plain functions in this file (no classes of our own).
+// SERVO and SENSOR messages are also sent to the transmitter (MESSAGE TEXT) so they show on its terminal.
 // UPDATE (firmware over the link) is written out in this file too.
 // Only lib/Protocol is needed (packet format). Add a subsystem = add a case in handlePacket().
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <Update.h>
+#include <stdarg.h>
+#include <string.h>
 #include "Protocol.h"
 
 #define RX1_PIN 14
@@ -20,11 +23,9 @@
 Servo s1, s2, s3; // tail, left fin, right fin
 
 const int NEUTRAL = 90;
-const int TAIL_TRIM_LIMIT = 40;
 const float SENSITIVITY = 0.05f; // state[t+1] = (1-s)*state[t] + s*target
 
 int leftFin = 0, rightFin = 0; // degrees relative to neutral
-int tailTrim = 0;              // shifts the centre the tail waves around
 int speedSetting = 1;          // tail wave speed (<=1 = no wave)
 int wavePosition = 0, waveDirection = 1;
 unsigned long lastWave = 0;
@@ -38,9 +39,40 @@ uint32_t updateSize = 0, updateReceived = 0, lastChunkLen = 0;
 unsigned long lastUpdateActivity = 0;
 const unsigned long UPDATE_IDLE_ABORT_MS = 15000;
 
-const unsigned long BLINK_INTERVAL = 500;
+const unsigned long BLINK_INTERVAL = 3000;
 unsigned long previousBlink = 0;
 bool ledState = LOW;
+
+// ============================================================================================
+// report(): for SERVO and SENSOR messages. Prints on the receiver's own serial AND sends it to the
+// transmitter (MESSAGE TEXT), where it shows up on the transmitter terminal (later: the GUI).
+// Everything else (boot, update, errors) just uses Serial and stays on the receiver.
+// Not sent during a firmware update so the link stays clear for the chunks.
+// ============================================================================================
+void report(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void report(const char *fmt, ...)
+{
+    char msg[160];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof msg, fmt, ap);
+    va_end(ap);
+
+    Serial.println(msg);
+    if (updateActive)
+        return;
+
+    proto::Packet p;
+    p.subsys = proto::Subsys::MESSAGE;
+    p.opcode = proto::message::TEXT;
+    p.body = (const uint8_t *)msg;
+    p.bodyLen = (uint16_t)strlen(msg);
+
+    uint8_t buf[proto::MAX_FRAME];
+    size_t n = proto::encode(p, buf, sizeof buf);
+    if (n > 0)
+        Serial1.write(buf, n);
+}
 
 // ============================================================================================
 // Sending replies (receiver -> transmitter)
@@ -94,7 +126,7 @@ void updateFins(bool force)
 
 void updateTail(bool force)
 {
-    writeServo(s1, lastTail, NEUTRAL + tailTrim + (speedSetting > 1 ? wavePosition : 0), force);
+    writeServo(s1, lastTail, NEUTRAL + (speedSetting > 1 ? wavePosition : 0), force);
 }
 
 void printServoState() // throttled: the controller re-sends while a button is held
@@ -102,7 +134,7 @@ void printServoState() // throttled: the controller re-sends while a button is h
     if (millis() - lastPrint < 250)
         return;
     lastPrint = millis();
-    Serial.printf("[RX] servo: left=%d right=%d speed=%d tailTrim=%d\n", leftFin, rightFin, speedSetting, tailTrim);
+    report("[SERVO] left=%d right=%d speed=%d", leftFin, rightFin, speedSetting);
 }
 
 void handleServo(const proto::Packet &p)
@@ -124,12 +156,8 @@ void handleServo(const proto::Packet &p)
             int target = constrain(delta ? cur + angle : angle, proto::servo::FIN_MIN, proto::servo::FIN_MAX);
             cur = delta ? target : smoothStep(cur, target); // SET_ANGLE eases, one step per message
         }
-        else if (fin == proto::servo::BACK)
-        {
-            tailTrim = constrain(delta ? tailTrim + angle : angle, -TAIL_TRIM_LIMIT, TAIL_TRIM_LIMIT);
-        }
         else
-            return;
+            return; // BACK (tail) is reserved, not implemented
         break;
     }
 
@@ -140,7 +168,7 @@ void handleServo(const proto::Packet &p)
         break;
 
     case proto::servo::RESET:
-        leftFin = rightFin = tailTrim = 0;
+        leftFin = rightFin = 0;
         wavePosition = 0;
         speedSetting = 1;
         break;
@@ -175,29 +203,12 @@ void tickTailWave()
 }
 
 // ============================================================================================
-// SENSOR   GET {sensor} -> reply DATA {sensor, v0, v1, ...}
+// SENSOR   no sensor code yet. When a sensor is added: GET {sensor} -> reply DATA {sensor, values...}
+// and report() its readings so they show on the transmitter.
 // ============================================================================================
-bool readGyro(int32_t &x, int32_t &y, int32_t &z)
-{
-    (void)x;
-    (void)y;
-    (void)z;
-    return false; // no gyro wired yet: put the real sensor read here
-}
-
 void handleSensor(const proto::Packet &p)
 {
-    if (p.opcode != proto::sensor::GET || p.argc < 1)
-        return;
-
-    if (p.args[0] == proto::sensor::GYRO)
-    {
-        int32_t x = 0, y = 0, z = 0;
-        if (readGyro(x, y, z))
-            sendReply(proto::Subsys::SENSOR, proto::sensor::DATA, 4, proto::sensor::GYRO, x, y, z);
-        else
-            Serial.println("[RX] SENSOR GET gyro: no gyro connected");
-    }
+    report("[SENSOR] no sensors implemented yet (opcode %u)", p.opcode);
 }
 
 // ============================================================================================
@@ -277,8 +288,8 @@ void handleUpdate(const proto::Packet &p)
         }
         if (Update.write((uint8_t *)p.body, p.bodyLen) != p.bodyLen)
         {
-            Serial.println("[RX] Flash write failed");
             updateAbort();
+            Serial.println("[RX] Flash write failed");
             updateNack(p.opcode, proto::update::ERR_WRITE_FAILED);
             return;
         }
@@ -330,8 +341,8 @@ void tickUpdateTimeout()
 {
     if (updateActive && millis() - lastUpdateActivity > UPDATE_IDLE_ABORT_MS)
     {
-        Serial.println("[RX] Update timed out, aborting");
         updateAbort();
+        Serial.println("[RX] Update timed out, aborting");
     }
 }
 
@@ -357,7 +368,6 @@ void handlePacket(const proto::Packet &p)
     }
 }
 
-// ============================================================================================
 void setup()
 {
     Serial.begin(115200);
@@ -391,7 +401,6 @@ void setup()
     updateTail(true);
 
     Serial.println("[RX] Ready");
-    s1.write(0);
 }
 
 void loop()

@@ -23,7 +23,7 @@ namespace proto
 {
     constexpr uint8_t SOF = 0xA5;
     constexpr size_t MAX_ARGS = 4;
-    constexpr size_t MAX_BODY = 512; // = firmware chunk size
+    constexpr size_t MAX_BODY = 512;  // = firmware chunk size
     constexpr size_t HEADER_SIZE = 5; // subsys, opcode, argc, bodyLen(2)
     constexpr size_t MAX_FRAME = 1 + HEADER_SIZE + MAX_ARGS * 4 + MAX_BODY + 2;
     constexpr uint32_t FRAME_TIMEOUT_MS = 100; // abandon a half received frame after this long
@@ -34,6 +34,7 @@ namespace proto
         constexpr uint8_t SERVO = 1;
         constexpr uint8_t SENSOR = 2;
         constexpr uint8_t UPDATE = 3;
+        constexpr uint8_t MESSAGE = 4;
     }
 
     /* ---------- SERVO ----------
@@ -41,7 +42,7 @@ namespace proto
      * DELTA_ANGLE {fin, angle}   add angle to the fin's current angle
      * RESET                      calibrate: everything back to neutral
      * SET_SPEED   {speed}        tail wave speed
-     * fin: LEFT / RIGHT / BACK(tail trim). angle in degrees relative to neutral. */
+     * fin: LEFT / RIGHT (BACK = tail is reserved, not implemented). angle in degrees relative to neutral. */
     namespace servo
     {
         constexpr uint8_t SET_ANGLE = 1;
@@ -95,6 +96,14 @@ namespace proto
         constexpr int32_t ERR_END_FAILED = 7;
     }
 
+    /* ---------- MESSAGE (receiver -> transmitter text, shown on the transmitter terminal / GUI) ----------
+     * Used for the receiver's SERVO and SENSOR messages, e.g. "[SERVO] left=5 right=0 speed=1".
+     * TEXT  body = the message as plain ASCII (no terminating NUL), up to MAX_BODY bytes */
+    namespace message
+    {
+        constexpr uint8_t TEXT = 1;
+    }
+
     /* ---------- Packet ---------- */
     struct Packet
     {
@@ -123,7 +132,13 @@ namespace proto
         uint32_t crcErrors() const { return crcErrors_; }
 
     private:
-        enum State : uint8_t { WAIT_SOF, HEADER, PAYLOAD, CRC };
+        enum State : uint8_t
+        {
+            WAIT_SOF,
+            HEADER,
+            PAYLOAD,
+            CRC
+        };
         State state_ = WAIT_SOF;
         uint8_t header_[HEADER_SIZE];
         uint8_t payload_[MAX_ARGS * 4 + MAX_BODY];
