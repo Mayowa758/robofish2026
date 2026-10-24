@@ -356,8 +356,15 @@ void loop()
   BP32.update();
   readLink();
 
-  if (Serial.available() > 0 && Serial.read() == 'u')
-    updateReceiver();
+  if (Serial.available() > 0)
+  {
+    char command = Serial.read();
+
+    if (command == 'u')
+      updateReceiver();
+    else if (command == 's')
+      sendPacket(Subsys::SERVO, servo::RESET);
+  }
 
   if (gamepad && gamepad->isConnected())
   {
