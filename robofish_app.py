@@ -246,6 +246,7 @@ class OceanBackground(QWidget):
                 painter.drawEllipse(QPointF(x, by * h), radius, radius)
 
 
+
 class FishPicture(QWidget):
     """Picture of the fish: assets/fish.(png|jpg|jpeg|webp) if present, otherwise a pixel-art clownfish."""
 
@@ -259,11 +260,11 @@ class FishPicture(QWidget):
             if path.exists():
                 pixmap = QPixmap(str(path))
                 if not pixmap.isNull():
-                    self._pixmap = pixmap.scaledToHeight(self.HEIGHT - 12, Qt.TransformationMode.SmoothTransformation)
+                    self._pixmap = pixmap.scaledToHeight(
+                        self.HEIGHT - 12,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
                     break
-        self._sprite = fish_sprite()
-        self._scale = 5
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
     def sizeHint(self):
         if self._pixmap is not None:
@@ -273,24 +274,39 @@ class FishPicture(QWidget):
     def minimumSizeHint(self):
         return self.sizeHint()
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
     def paintEvent(self, event):
         painter = QPainter(self)
         w, h = self.width(), self.height()
+
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(52, 201, 235, 50))  # rounded picture frame
+        painter.setBrush(QColor(52, 201, 235, 50))
         painter.drawRoundedRect(0, 0, w, h, 14, 14)
+
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+
         if self._pixmap is not None:
             painter.drawPixmap(6, 6, self._pixmap)
             return
+
         s = self._scale
         ox = (w - FISH_W * s) // 2
         oy = (h - FISH_H * s) // 2
+
         for y, line in enumerate(self._sprite):
             for x, key in enumerate(line):
                 if key != ".":
-                    painter.fillRect(ox + x * s, oy + y * s, s, s, QColor(FISH_PALETTE[key]))
+                    painter.fillRect(
+                        ox + x * s,
+                        oy + y * s,
+                        s,
+                        s,
+                        QColor(FISH_PALETTE[key])
+                    )
+
 
 
 class Panel(QFrame):
@@ -385,8 +401,30 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout()
         header.addWidget(PixelText("ROBOFISH", scale=11, color=WHITE, shadow=OUTLINE), 0, Qt.AlignmentFlag.AlignVCenter)
         header.addStretch(1)
-        header.addWidget(FishPicture(), 0, Qt.AlignmentFlag.AlignVCenter)
+
+        fish_container = QWidget()
+        fish_layout = QVBoxLayout(fish_container)
+        fish_layout.setContentsMargins(0, 0, 0, 0)
+        fish_layout.setSpacing(2)
+
+        fish_picture = FishPicture()
+        fish_layout.addWidget(fish_picture)
+
+        version_text = QLabel("v2.0")
+        version_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        version_text.setStyleSheet(
+            "color: white; background: transparent;"
+        )
+        fish_layout.addWidget(version_text)
+
+        header.addWidget(
+            fish_container,
+            0,
+            Qt.AlignmentFlag.AlignVCenter
+        )
+
         content.addLayout(header)
+
 
         # --- connection bar ----------------------------------------------
         top = QHBoxLayout()
