@@ -21,6 +21,7 @@ semi-transparent. Tune it with the OCEAN_* constants below.
 """
 
 import math
+from datetime import datetime
 import random
 import sys
 from pathlib import Path
@@ -45,10 +46,12 @@ from PySide6.QtWidgets import (
 )
 
 from gui_parser import parse_line
+from camera_feed import PREFIX as CAMERA_PREFIX, CameraFeed
 from pixel_font import FISH_H, FISH_PALETTE, FISH_W, GLYPH_H, fish_sprite, text_columns, text_pixels
 import update_receiver  # only for its TRANSMITTER_PORT setting; importing it runs nothing
 
 ROOT = Path(__file__).resolve().parent
+SNAPSHOT_DIR = ROOT / "snapshots"
 BAUD_RATE = 115200
 DEFAULT_PORT = update_receiver.TRANSMITTER_PORT  # the port update_receiver.py uses
 
@@ -334,18 +337,29 @@ class Panel(QFrame):
         outer.addLayout(self.body)
         outer.addStretch(1)
 
-        self.fade = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self.fade)
+        # self.fade = QGraphicsOpacityEffect(self)
+        # self.setGraphicsEffect(self.fade)
         self.set_active(False)
 
     def set_active(self, active):
+        # Fade the background and each item separately, so an item marked keepOpaque (the camera) stays clear.
+        opacity = 1.0 if active else INACTIVE_OPACITY
+        bg = QColor(self.color)
+        background = f"rgba({bg.red()}, {bg.green()}, {bg.blue()}, {int(opacity * 255)})"
         # same border width either way, so nothing moves; inactive border = box colour = no visible outline
-        border = HIGHLIGHT if active else self.color
+        border = HIGHLIGHT if active else background
         self.setStyleSheet(
-            f"QFrame#panel {{ background: {self.color}; border: 5px solid {border}; border-radius: 20px; }}"
+            f"QFrame#panel {{ background: {background}; border: 5px solid {border}; border-radius: 20px; }}"
             "QLabel { background: transparent; color: #ffffff; border: none; }"
         )
-        self.fade.setOpacity(1.0 if active else INACTIVE_OPACITY)
+        for child in self.children():
+            if not isinstance(child, QWidget) or child.property("keepOpaque"):
+                continue
+            effect = child.graphicsEffect()
+            if not isinstance(effect, QGraphicsOpacityEffect):
+                effect = QGraphicsOpacityEffect(child)
+                child.setGraphicsEffect(effect)
+            effect.setOpacity(opacity)
 
 
 def make_bar(minimum, maximum):
@@ -386,6 +400,10 @@ class MainWindow(QMainWindow):
         self.refresh_ports()
         self.refresh_highlight()
         self.refresh_buttons()
+        
+        self.rx_buffer = b""
+        self.camera = CameraFeed()
+        self.save_next_frame = False  # set by Snap: save the next picture that arrives
 
     # ------------------------------------------------------------------ UI
 
@@ -464,13 +482,27 @@ class MainWindow(QMainWindow):
         self.sensor_text = QLabel("No sensors yet")
         self.sensor_text.setWordWrap(True)
         self.sensor_panel.body.addWidget(self.sensor_text)
-        self.camera_view = QLabel("Camera: not configured yet")  # the camera image will be shown here later
+        self.camera_view = QLabel("No picture yet")
         self.camera_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.camera_view.setMinimumHeight(170)
+        self.camera_view.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)  # width: don't grow with the picture
+        self.camera_view.setFixedHeight(180)
+        self.camera_view.setProperty("keepOpaque", True)
         self.camera_view.setStyleSheet(
             "background: rgba(0, 0, 0, 60); color: #ffffff; border: 2px dashed rgba(255, 255, 255, 140); border-radius: 12px;"
         )
         self.sensor_panel.body.addWidget(self.camera_view)
+        self.camera_status = QLabel("Camera off")
+        self.sensor_panel.body.addWidget(self.camera_status)
+        camera_buttons = QHBoxLayout()
+        self.camera_start_button = QPushButton("Start")
+        self.camera_stop_button = QPushButton("Stop")
+        self.camera_snap_button = QPushButton("Snap")
+        self.camera_start_button.clicked.connect(lambda: self.send_char("v"))
+        self.camera_stop_button.clicked.connect(lambda: self.send_char("x"))
+        self.camera_snap_button.clicked.connect(self.snap)
+        for button in (self.camera_start_button, self.camera_stop_button, self.camera_snap_button):
+            camera_buttons.addWidget(button)
+        self.sensor_panel.body.addLayout(camera_buttons)
         boxes.addWidget(self.sensor_panel, 1)
 
         # update (green)
@@ -509,7 +541,7 @@ class MainWindow(QMainWindow):
             "QPlainTextEdit { background: #0d0f14; color: #e6e8ee; border: 1px solid #2a2e38; border-radius: 8px; }"
         )
         clear_button.clicked.connect(self.log.clear)
-        content.addWidget(self.log, 2)
+        content.addWidget(self.log, 1)
 
         # normal Qt buttons and drop-down, same look as the first version of the app
         self.setStyleSheet(
@@ -579,6 +611,7 @@ class MainWindow(QMainWindow):
             return False
 
         self.rx_buffer = b""
+        self.camera.reset()
         self.mode = "SERVO"  # the transmitter starts in SERVO mode
         self.status_label.setText(f"Connected to {info.systemLocation()}")
         self.refresh_highlight()
@@ -623,6 +656,13 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ events
 
     def handle_line(self, line):
+        if line.startswith(CAMERA_PREFIX):  # camera pieces: not logged, there are many
+            jpeg = self.camera.feed(line)
+            if jpeg is not None:
+                self.show_camera_frame(jpeg)
+            return
+        if line.startswith("[CAMERA]"):  # receiver camera messages: also shown under the picture
+            self.camera_status.setText(line[len("[CAMERA]"):].strip())
         self.append_log(line)
         event = parse_line(line)
         kind, data = event.kind, event.data
@@ -687,7 +727,32 @@ class MainWindow(QMainWindow):
         self.port_combo.setEnabled(not connected and not busy)
         self.build_button.setEnabled(not busy and not self.updating)
         self.calibrate_button.setEnabled(connected and not busy and not self.updating)
+        for button in (self.camera_start_button, self.camera_stop_button, self.camera_snap_button):
+            button.setEnabled(connected and not busy and not self.updating)
 
+    def show_camera_frame(self, jpeg):
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(jpeg, "JPG"):
+            return
+        self.camera_view.setPixmap(
+            pixmap.scaled(
+                self.camera_view.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+            )
+        )
+        self.camera_status.setText(self.camera.status_text())
+        if self.save_next_frame:
+            self.save_next_frame = False
+            self.save_snapshot(jpeg)
+    def snap(self):
+        """Ask the fish for a picture and save it when it arrives."""
+        self.save_next_frame = True
+        self.send_char("p")
+
+    def save_snapshot(self, jpeg):
+        SNAPSHOT_DIR.mkdir(exist_ok=True)
+        path = SNAPSHOT_DIR / datetime.now().strftime("snap_%Y-%m-%d_%H-%M-%S.jpg")
+        path.write_bytes(jpeg)
+        self.append_log(f"[APP] saved {path}")
     # ------------------------------------------------------------------ Build + update
 
     def start_update(self):

@@ -35,6 +35,7 @@ namespace proto
         constexpr uint8_t SENSOR = 2;
         constexpr uint8_t UPDATE = 3;
         constexpr uint8_t MESSAGE = 4;
+        constexpr uint8_t CAMERA = 5;
     }
 
     /* ---------- SERVO ----------
@@ -102,6 +103,40 @@ namespace proto
     namespace message
     {
         constexpr uint8_t TEXT = 1;
+    }
+
+    /* ---------- CAMERA ----------
+     * START {intervalMs}                     stream frames; intervalMs = minimum gap between the
+     *                                        start of two frames (0 = as fast as the link allows)
+     * STOP                                   stop streaming (a frame still being sent is dropped)
+     * SNAP                                   send a single frame
+     * SET   {setting, value}                 SIZE (SIZE_*), QUALITY (10..63, higher = smaller files),
+     *                                        VFLIP / HMIRROR (0 or 1)
+     * FRAME {frameId, offset, total} + body  one piece of a JPEG                (receiver -> transmitter)
+     * ACK   {frameId, bytesForwarded}        flow control: the receiver only keeps a couple of pieces
+     *                                        un-ACKed, so a slow link can never overflow
+     *                                                                           (transmitter -> receiver)
+     * A frame is complete when offset + bodyLen == total. A frame with a missing piece is simply
+     * dropped by whoever reassembles it; the next frame starts at offset 0 with a new frameId. */
+    namespace camera
+    {
+        constexpr uint8_t START = 1;
+        constexpr uint8_t STOP = 2;
+        constexpr uint8_t SNAP = 3;
+        constexpr uint8_t SET = 4;
+        constexpr uint8_t FRAME = 5;
+        constexpr uint8_t ACK = 6;
+
+        // SET settings
+        constexpr int32_t SIZE = 0;
+        constexpr int32_t QUALITY = 1;
+        constexpr int32_t VFLIP = 2;
+        constexpr int32_t HMIRROR = 3;
+
+        // SIZE values
+        constexpr int32_t SIZE_QQVGA = 0; // 160x120
+        constexpr int32_t SIZE_QVGA = 1;  // 320x240 (default)
+        constexpr int32_t SIZE_VGA = 2;   // 640x480 (largest allowed: frame buffers are sized for it)
     }
 
     /* ---------- Packet ---------- */
