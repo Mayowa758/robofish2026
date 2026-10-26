@@ -85,16 +85,34 @@ size_t base64Encode(const uint8_t* in, size_t len, char* out) {
   return o;
 }
 
-void forwardCameraChunk(const Packet& p) {
-  if (p.argc < 3) return;
-  static char line[64 + (MAX_BODY + 2) / 3 * 4 + 2];
-  int n = snprintf(line, 64, "[CAM] %ld %ld %ld ", (long)p.args[0],
-                   (long)p.args[1], (long)p.args[2]);
+// The ACK waits until the PC connection has room for two more pieces, so writing a piece never
+// blocks the loop (which would delay the gamepad and the servo commands).
+const size_t CAM_LINE_MAX = 64 + (MAX_BODY + 2) / 3 * 4 + 2;
+bool cameraAckPending = false;
+int32_t cameraAckFrame = 0, cameraAckBytes = 0;
+
+void sendCameraAck()
+{
+  if (!cameraAckPending || Serial.availableForWrite() < (int)(2 * CAM_LINE_MAX))
+    return;
+  cameraAckPending = false;
+  sendPacket(Subsys::CAMERA, camera::ACK, {cameraAckFrame, cameraAckBytes});
+}
+
+void forwardCameraChunk(const Packet &p)
+{
+  if (p.argc < 3)
+    return;
+  static char line[CAM_LINE_MAX];
+  int n = snprintf(line, 64, "[CAM] %ld %ld %ld ", (long)p.args[0], (long)p.args[1], (long)p.args[2]);
   n += base64Encode(p.body, p.bodyLen, line + n);
   line[n++] = '\n';
-  Serial.write((const uint8_t*)line, n);
-  sendPacket(Subsys::CAMERA, camera::ACK,
-             {p.args[0], p.args[1] + (int32_t)p.bodyLen});
+  Serial.write((const uint8_t *)line, n); // goes into the 4 KB buffer, returns straight away
+
+  cameraAckPending = true; // ACKs count total bytes, so a newer one replaces an older one
+  cameraAckFrame = p.args[0];
+  cameraAckBytes = p.args[1] + (int32_t)p.bodyLen;
+  sendCameraAck();
 }
 
 // SENSOR mode: CROSS = start the camera, CIRCLE = stop it. Edge-triggered,
@@ -369,6 +387,7 @@ void updateReceiver() {
 }
 
 void setup() {
+  Serial.setTxBufferSize(4096);
   Serial.begin(115200);
   Serial1.setRxBufferSize(2048);  // must be set before begin()
   Serial1.begin(115200, SERIAL_8N1, RX1_PIN, TX1_PIN);
@@ -384,6 +403,7 @@ void setup() {
 void loop() {
   BP32.update();
   readLink();
+  sendCameraAck(); 
 
   if (Serial.available() > 0) {
     char command = Serial.read();
