@@ -19,11 +19,13 @@
 #define S2_PIN 39  // left fin
 #define S3_PIN 38  // right fin
 
+
 // ============================================================================================
 // State
 // ============================================================================================
 const int s1 = S1_PIN, s2 = S2_PIN,
           s3 = S3_PIN;  // tail, left fin, right fin (servos are just pins now)
+
 
 int servoChannel(int pin) {
   return pin == S1_PIN ? 0 : pin == S2_PIN ? 2 : 4;
@@ -39,7 +41,12 @@ void servoAttach(int pin) {
 }
 
 const int NEUTRAL = 90;
+const int NEUTRAL_BACK = 90;
 const float SENSITIVITY = 0.05f;  // state[t+1] = (1-s)*state[t] + s*target
+
+
+const int low_amp = 10;
+const int high_amp = 40;
 
 int leftFin = 0, rightFin = 0;  // degrees relative to neutral
 int speedSetting = 1;           // tail wave speed (<=1 = no wave)
@@ -138,7 +145,7 @@ void updateFins(bool force) {
 }
 
 void updateTail(bool force) {
-  writeServo(s1, lastTail, NEUTRAL + (speedSetting > 1 ? wavePosition : 0),
+  writeServo(s1, lastTail, NEUTRAL_BACK + (speedSetting > 1 ? wavePosition : 0),
              force);
 }
 
@@ -198,7 +205,7 @@ void tickTailWave() {
       speedSetting <= 1)  // servos stay still during a firmware update
     return;
 
-  int amp = map(speedSetting, 0, 20, 10, 30);
+  int amp = map(speedSetting, 0, 20, low_amp, high_amp);
   int speedDelay = map(speedSetting, 0, 20, 20, 5);
 
   if (millis() - lastWave >= (unsigned long)speedDelay) {
